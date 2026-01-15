@@ -777,51 +777,7 @@ class AnalyticsService {
     return insights;
   }
 
-  // Get purpose distribution across all departments (for master admin)
-  List<Map<String, dynamic>> _getPurposeByDepartment(List<QueueEntry> entries) {
-    print('_getPurposeByDepartment: Processing ${entries.length} entries');
-    final Map<String, Map<String, int>> purposeDeptMap = {};
-    
-    for (final entry in entries) {
-      final purpose = entry.purpose;
-      final dept = entry.department;
-      
-      if (purpose.isEmpty) {
-        print('Warning: Found entry with empty purpose, skipping');
-        continue;
-      }
-      
-      if (!purposeDeptMap.containsKey(purpose)) {
-        purposeDeptMap[purpose] = {};
-      }
-      
-      purposeDeptMap[purpose]![dept] = (purposeDeptMap[purpose]![dept] ?? 0) + 1;
-    }
-    
-    print('_getPurposeByDepartment: Found ${purposeDeptMap.length} unique purposes');
-    
-    // Convert to list format for pie chart
-    final List<Map<String, dynamic>> result = [];
-    for (final entry in purposeDeptMap.entries) {
-      final purpose = entry.key;
-      final deptCounts = entry.value;
-      final totalCount = deptCounts.values.fold(0, (sum, count) => sum + count);
-      
-      result.add({
-        'purpose': purpose,
-        'count': totalCount,
-        'departments': deptCounts.length,
-        'color': _getPurposeColor(purpose),
-      });
-    }
-    
-    result.sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
-    print('_getPurposeByDepartment: Returning ${result.length} items');
-    if (result.isNotEmpty) {
-      print('_getPurposeByDepartment: Top item = ${result.first}');
-    }
-    return result;
-  }
+  // _getPurposeByDepartment removed because it was unused
 
   // Get department usage statistics (for master admin)
   List<Map<String, dynamic>> _getDepartmentUsage(List<QueueEntry> entries) {

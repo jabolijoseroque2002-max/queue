@@ -9,6 +9,7 @@ class QueueEntry {
   final String? course; // Course code (e.g., 'BSIT', 'BSCS')
   final DateTime timestamp;
   final int queueNumber;
+  final int batchNumber;
   final String status; // Added status field
   final DateTime? countdownStart; // When countdown started
   final int countdownDuration; // Countdown duration in seconds
@@ -34,6 +35,7 @@ class QueueEntry {
     this.course,
     required this.timestamp,
     required this.queueNumber,
+    this.batchNumber = 1,
     this.status = 'waiting', // Default status
     this.countdownStart,
     this.countdownDuration = 30, // 30 seconds default
@@ -61,6 +63,7 @@ class QueueEntry {
       'course': course,
       'timestamp': timestamp.toIso8601String(),
       'queue_number': queueNumber,
+      'batch_number': batchNumber,
       'status': status,
       'countdown_start': countdownStart?.toIso8601String(),
       'countdown_duration': countdownDuration,
@@ -90,6 +93,7 @@ class QueueEntry {
       course: json['course'],
       timestamp: DateTime.parse(json['timestamp']),
       queueNumber: json['queue_number'],
+      batchNumber: json['batch_number'] ?? 1,
       status: json['status'] ?? 'waiting',
       countdownStart: json['countdown_start'] != null
           ? DateTime.parse(json['countdown_start'])
@@ -119,6 +123,7 @@ class QueueEntry {
     String? course,
     DateTime? timestamp,
     int? queueNumber,
+    int? batchNumber,
     String? status,
     DateTime? countdownStart,
     int? countdownDuration,
@@ -143,6 +148,7 @@ class QueueEntry {
       course: course ?? this.course,
       timestamp: timestamp ?? this.timestamp,
       queueNumber: queueNumber ?? this.queueNumber,
+      batchNumber: batchNumber ?? this.batchNumber,
       status: status ?? this.status,
       countdownStart: countdownStart ?? this.countdownStart,
       countdownDuration: countdownDuration ?? this.countdownDuration,

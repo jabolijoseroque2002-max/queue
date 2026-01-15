@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/queue_entry.dart';
 
@@ -240,14 +239,6 @@ class EmailService {
     required String templateId,
     required Map<String, dynamic> templateParams,
   }) async {
-    final payload = {
-      'service_id': serviceId,
-      'template_id': templateId,
-      'user_id': publicKey,
-      if (privateKey.isNotEmpty) 'accessToken': privateKey,
-      'template_params': templateParams,
-    };
-
     try {
       print('═══════════════════════════════════════════════════════');
       print('📧 EmailJS ($label) - Attempting to send email...');

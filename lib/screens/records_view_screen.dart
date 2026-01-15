@@ -427,7 +427,7 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
                 ),
                 Expanded(
                   child: _buildStatItem(
-                    'Priority',
+                    'All Priority',
                     _statistics['priority'] ?? 0,
                     Colors.green,
                   ),
@@ -732,7 +732,7 @@ class _RecordsViewScreenState extends State<RecordsViewScreen> {
 
   List<DropdownMenuItem<String>> _getPriorityOptions() {
     final items = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(value: 'all', child: Text('All Priorities')),
+      const DropdownMenuItem(value: 'all', child: Text('All')),
     ];
 
     // Add priority types that exist in the database

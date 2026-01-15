@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'dart:math' as math;
 import 'dart:async';
-import '../services/analytics_service.dart';
 import '../services/supabase_service.dart';
-import '../services/department_service.dart';
 import '../constants/supabase_config.dart';
 import '../models/admin_user.dart';
 import '../models/queue_entry.dart';
@@ -19,9 +16,7 @@ class CASAnalyticsScreen extends StatefulWidget {
 
 class _CASAnalyticsScreenState extends State<CASAnalyticsScreen>
     with TickerProviderStateMixin {
-  final AnalyticsService _analyticsService = AnalyticsService();
   final SupabaseService _supabaseService = SupabaseService();
-  final DepartmentService _departmentService = DepartmentService();
   
   List<QueueEntry> _casQueueEntries = [];
   bool _isLoading = false;

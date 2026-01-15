@@ -1,13 +1,6 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-
 class EmailSmsService {
   // Free email service configuration
-  static const String _emailServiceUrl =
-      'https://api.emailjs.com/api/v1.0/email/send';
-  static const String _serviceId = 'YOUR_SERVICE_ID'; // Get from EmailJS
-  static const String _templateId = 'YOUR_TEMPLATE_ID'; // Get from EmailJS
-  static const String _publicKey = 'YOUR_PUBLIC_KEY'; // Get from EmailJS
+  
 
   // Send SMS via Email-to-SMS gateway
   Future<bool> sendSmsViaEmail({

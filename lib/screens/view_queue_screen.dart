@@ -69,15 +69,15 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
 
     // Staggered animations (safe interval clamping)
     for (int i = 0; i < _departments.length; i++) {
-      final start = i * 0.15;
-      final end = (i + 1) * 0.15;
+      final start = (i * 0.15).clamp(0.0, 1.0);
+      final end = ((i + 1) * 0.15).clamp(0.0, 1.0);
       _staggerAnimations.add(
         Tween<double>(begin: 0.0, end: 1.0).animate(
           CurvedAnimation(
             parent: _staggerController,
             curve: Interval(
               start,
-              end > 1.0 ? 1.0 : end,
+              end,
               curve: Curves.easeOutBack,
             ),
           ),
@@ -178,24 +178,37 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
 
   Future<void> _initializeDepartments() async {
     try {
-      // Load departments from database
       await _departmentService.initializeDefaultDepartments();
-      // Get only active departments for live queue display
       final activeDepartments = _departmentService.getActiveDepartments();
+
+      List<String> departmentCodes;
+      if (activeDepartments.isNotEmpty) {
+        departmentCodes =
+            activeDepartments.map((dept) => dept.code).toSet().toList();
+      } else {
+        final activeEntries = await _supabaseService.getAllActiveQueueEntries();
+        departmentCodes =
+            activeEntries.map((e) => e.department).toSet().toList();
+      }
+
+      departmentCodes.sort();
+      if (departmentCodes.remove('R')) {
+        departmentCodes.add('R');
+      }
+
       setState(() {
-        _departments = activeDepartments.map((dept) => dept.code).toList();
-        // Rebuild stagger animations for new department count
+        _departments = departmentCodes;
         _staggerAnimations.clear();
         for (int i = 0; i < _departments.length; i++) {
-          final start = i * 0.15;
-          final end = (i + 1) * 0.15;
+          final start = (i * 0.15).clamp(0.0, 1.0);
+          final end = ((i + 1) * 0.15).clamp(0.0, 1.0);
           _staggerAnimations.add(
             Tween<double>(begin: 0.0, end: 1.0).animate(
               CurvedAnimation(
                 parent: _staggerController,
                 curve: Interval(
                   start,
-                  end > 1.0 ? 1.0 : end,
+                  end,
                   curve: Curves.easeOutBack,
                 ),
               ),
@@ -225,42 +238,54 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
       await _supabaseService.checkExpiredCountdowns();
       await _supabaseService.removeMissedEntriesFromLiveQueue();
 
+      // Check if data actually changed to avoid unnecessary rebuilds
+      bool hasChanges = false;
+
       for (final department in _departments) {
         try {
-        // Get only top 12 active entries (waiting and serving) for live display (4x3 grid)
-        final entries = await _supabaseService
-            .getTop12ActiveQueueEntriesByDepartment(department);
+          final entries = await _supabaseService
+              .getTop12ActiveQueueEntriesByDepartment(department);
           
-          debugPrint('Loaded ${entries.length} entries for department $department');
+          // ... sorting logic ...
+          entries.sort((a, b) {
+            if (a.isPriority && !b.isPriority) return -1;
+            if (!a.isPriority && b.isPriority) return 1;
+            return a.queueNumber.compareTo(b.queueNumber);
+          });
           
-        // Sort by priority first, then by queue number (PWD/Senior appear in top 2)
-        entries.sort((a, b) {
-          // Priority users first
-          if (a.isPriority && !b.isPriority) return -1;
-          if (!a.isPriority && b.isPriority) return 1;
-          // Within same priority level, sort by queue number
-          return a.queueNumber.compareTo(b.queueNumber);
-        });
-        
-        // Get first entry for tracking (no automatic announcements)
-        final firstEntry = entries.isNotEmpty ? entries.first : null;
-        
-        // Don't announce automatically - only announce when department admin clicks Start
-        
-        _previousFirstEntries[department] = firstEntry;
-        _departmentQueues[department] = entries;
+          final firstEntry = entries.isNotEmpty ? entries.first : null;
+          
+          // Check for changes
+          if (_departmentQueues[department]?.length != entries.length) {
+            hasChanges = true;
+          } else {
+             // Deep check if needed, or just assume if length is same and first entry is same
+             final oldEntries = _departmentQueues[department] ?? [];
+             for (int i=0; i<entries.length; i++) {
+               if (entries[i].id != oldEntries[i].id || entries[i].status != oldEntries[i].status) {
+                 hasChanges = true;
+                 break;
+               }
+             }
+          }
+
+          _previousFirstEntries[department] = firstEntry;
+          _departmentQueues[department] = entries;
         } catch (deptError) {
           debugPrint('Error loading queue data for department $department: $deptError');
-          // Continue with other departments even if one fails
           _departmentQueues[department] = [];
         }
       }
+      
+      // Only rebuild if data changed
+      if (hasChanges && mounted) {
+        setState(() {});
+      }
     } catch (e) {
       debugPrint('Error loading queue data: $e');
-      debugPrint('Stack trace: ${StackTrace.current}');
     }
   }
-
+ 
   Widget _buildDepartment(String department, int index) {
     // Hide any entries that are not waiting/current to ensure missed don't display
     final entries = (_departmentQueues[department] ?? [])
@@ -274,6 +299,7 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
         return Transform.scale(
           scale: animation.value,
           child: Container(
+            key: ValueKey('dept_$department'),
             margin: const EdgeInsets.all(8),
             padding: const EdgeInsets.all(12),
             width: 430, // Fixed width for consistent container sizing
@@ -413,6 +439,7 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
             }
 
             return Container(
+              key: ValueKey('entry_${person.id}'),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: getProgressColor(), width: 3),
@@ -508,6 +535,7 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
           }
 
           return Container(
+            key: ValueKey('entry_${person.id}'),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [getBarColor(), getBarColor().withOpacity(0.8)],
@@ -581,6 +609,7 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
         } else {
           // Show empty slot
           return Container(
+            key: ValueKey('empty_$index'),
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
               borderRadius: BorderRadius.circular(8),
@@ -612,40 +641,6 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
     );
   }
 
-  Widget _buildLogoContainer() {
-    return Container(
-      margin: const EdgeInsets.all(8),
-      width: 300,
-      height: 300,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.asset(
-          'assets/queue_logo.jpg',
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) {
-            return Center(
-              child: Icon(
-                Icons.image_not_supported,
-                size: 64,
-                color: Colors.grey.shade400,
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
 
   List<Widget> _buildDepartmentGrid() {
     final List<Widget> rows = [];
@@ -658,29 +653,41 @@ class _ViewQueueScreenState extends State<ViewQueueScreen>
       final List<Widget> rowChildren = [];
 
       // First department in the row
-      rowChildren.add(_buildDepartment(departmentsToShow[i], i));
+      rowChildren.add(
+        Expanded(
+          child: _buildDepartment(departmentsToShow[i], i),
+        ),
+      );
 
       // Second department in the row (if exists)
       if (i + 1 < departmentsToShow.length) {
-        rowChildren.add(_buildDepartment(departmentsToShow[i + 1], i + 1));
+        rowChildren.add(
+          Expanded(
+            child: _buildDepartment(departmentsToShow[i + 1], i + 1),
+          ),
+        );
       }
 
       // Third department in the row (if exists)
       if (i + 2 < departmentsToShow.length) {
-        rowChildren.add(_buildDepartment(departmentsToShow[i + 2], i + 2));
+        rowChildren.add(
+          Expanded(
+            child: _buildDepartment(departmentsToShow[i + 2], i + 2),
+          ),
+        );
       }
 
       // Fourth department in the row (if exists)
       if (i + 3 < departmentsToShow.length) {
-        rowChildren.add(_buildDepartment(departmentsToShow[i + 3], i + 3));
-      }
-
-      // Add logo container to the second row only (when i == 4), next to departments
-      if (i == 4) {
-        rowChildren.add(_buildLogoContainer());
+        rowChildren.add(
+          Expanded(
+            child: _buildDepartment(departmentsToShow[i + 3], i + 3),
+          ),
+        );
       }
 
       rows.add(Row(
+        key: UniqueKey(), // Force fresh row creation to prevent 'child == _child' assertion
         children: rowChildren,
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       ));

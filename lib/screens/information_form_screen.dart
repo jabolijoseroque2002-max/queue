@@ -1917,7 +1917,7 @@ class _InformationFormScreenState extends State<InformationFormScreen>
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              'Priority Queue',
+                                              'Priority Queue (Prepare your PWD ID and Senior ID)',
                                               style: TextStyle(
                                                 fontWeight: FontWeight.w600,
                                                 color: Colors.green.shade700,

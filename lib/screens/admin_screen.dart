@@ -120,10 +120,11 @@ class _AdminScreenState extends State<AdminScreen> {
       }
 
       newQueue.sort((a, b) {
-        // Priority users first (PWD/Senior)
+        if (a.batchNumber != b.batchNumber) {
+          return a.batchNumber.compareTo(b.batchNumber);
+        }
         if (a.isPriority && !b.isPriority) return -1;
         if (!a.isPriority && b.isPriority) return 1;
-        // Within same priority level, sort by queue number
         final numCmp = a.queueNumber.compareTo(b.queueNumber);
         if (numCmp != 0) return numCmp;
         return statusRank(a.status).compareTo(statusRank(b.status));
@@ -635,113 +636,6 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  Widget _buildPurposeStatisticsSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Purpose Statistics by Department & Course',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: const Color(0xFF263277),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 20),
-          if (_purposeStatsByDeptCourse.isEmpty)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(40.0),
-                child: Text(
-                  'No purpose statistics available',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-            )
-          else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowColor: MaterialStateColor.resolveWith(
-                  (states) => const Color(0xFF263277).withOpacity(0.1),
-                ),
-                columns: const [
-                  DataColumn(
-                    label: Text(
-                      'Department',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'Course',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'Top Purpose',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'Count',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    numeric: true,
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'Total Entries',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    numeric: true,
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'Action',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-                rows: _purposeStatsByDeptCourse.map((stat) {
-                  final purposeName = stat['topPurpose'] as String;
-                  return DataRow(
-                    cells: [
-                      DataCell(Text(stat['departmentName'] as String)),
-                      DataCell(Text(stat['course'] as String)),
-                      DataCell(Text(purposeName)),
-                      DataCell(Text((stat['topCount'] as int).toString())),
-                      DataCell(Text((stat['totalCount'] as int).toString())),
-                      DataCell(
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deletePurposeFromOverview(purposeName),
-                          tooltip: 'Delete Purpose',
-                        ),
-                      ),
-                    ],
-                  );
-                }).toList(),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _deletePurposeFromOverview(String purposeName) async {
     try {
@@ -829,129 +723,6 @@ class _AdminScreenState extends State<AdminScreen> {
     }
   }
 
-  Future<void> _downloadPurposeData() async {
-    try {
-      // Show confirmation dialog
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Download Purpose Data'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Are you sure you want to download the purpose statistics data?\n',
-              ),
-              Text(
-                'Total entries: ${_allQueueEntries.length}\n',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const Text(
-                'The file will contain purpose statistics by department and course.',
-                style: TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'The file will be saved to your documents folder.',
-                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF263277),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Download'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirmed != true) {
-        return;
-      }
-
-      if (_allQueueEntries.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No data available to download'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // Create Excel file
-      final excel = Excel.createExcel();
-      excel.delete('Sheet1');
-      final sheet = excel['Queue Data'];
-
-      // Add headers
-      sheet.appendRow([
-        TextCellValue('Name'),
-        TextCellValue('Purpose'),
-        TextCellValue('SSU ID'),
-        TextCellValue('Email'),
-        TextCellValue('Phone Number'),
-        TextCellValue('Course'),
-        TextCellValue('Department'),
-        TextCellValue('Queue Number'),
-        TextCellValue('Status'),
-        TextCellValue('Timestamp'),
-      ]);
-
-      // Add data rows
-      for (final entry in _allQueueEntries) {
-        final deptName = _departmentService.getDepartmentByCode(entry.department)?.name ?? entry.department;
-        sheet.appendRow([
-          TextCellValue(entry.name),
-          TextCellValue(entry.purpose),
-          TextCellValue(entry.ssuId),
-          TextCellValue(entry.email),
-          TextCellValue(entry.phoneNumber),
-          TextCellValue(entry.course ?? 'N/A'),
-          TextCellValue(deptName),
-          TextCellValue(entry.queueNumber.toString()),
-          TextCellValue(entry.status),
-          TextCellValue(entry.timestamp.toString()),
-        ]);
-      }
-
-      // Save file
-      final directory = await getApplicationDocumentsDirectory();
-      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.')[0];
-      final filePath = '${directory.path}/queue_data_$timestamp.xlsx';
-      final file = File(filePath);
-      await file.writeAsBytes(excel.encode()!);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('File downloaded to: $filePath'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error downloading file: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -2490,7 +2261,6 @@ class _AdminScreenState extends State<AdminScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with Add Department Button
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -2502,18 +2272,36 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
               ),
               if (_adminService.isMasterAdmin)
-                ElevatedButton.icon(
-                  onPressed: _showAddDepartmentDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Department'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF263277),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _showAddDepartmentDialog,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Department'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF263277),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: !_isLoading ? _resetQueue : null,
+                      icon: const Icon(Icons.content_cut),
+                      label: const Text('Cut Off'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
             ],
           ),

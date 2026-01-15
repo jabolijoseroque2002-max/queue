@@ -22,6 +22,7 @@ class SupabaseConfig {
   static const String timestampColumn = 'timestamp';
   static const String queueNumberColumn = 'queue_number';
   static const String statusColumn = 'status';
+  static const String batchNumberColumn = 'batch_number';
 
   // Column names for admin_users table
   static const String adminIdColumn = 'id';

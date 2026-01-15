@@ -224,9 +224,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 final Map<String, dynamic> graphs = ok
                     ? (snapshot.data!['graphs'] as Map<String, dynamic>)
                     : <String, dynamic>{};
-                final Map<String, dynamic> summary = ok
-                    ? (snapshot.data!['summary'] as Map<String, dynamic>)
-                    : <String, dynamic>{};
                 
                 // Master admin specific charts
                 final List<dynamic> deptUsage = ok && isMasterAdmin
@@ -1640,4 +1637,3 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 }
-

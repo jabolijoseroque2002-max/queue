@@ -14,6 +14,7 @@ class SupabaseService {
   SupabaseService._internal();
 
   late final SupabaseClient _supabase;
+  int _currentBatchNumber = 1;
 
   // Initialize Supabase
   Future<void> initialize() async {
@@ -22,6 +23,27 @@ class SupabaseService {
       anonKey: SupabaseConfig.supabaseAnonKey,
     );
     _supabase = Supabase.instance.client;
+    await _loadCurrentBatchNumber();
+  }
+
+  Future<void> _loadCurrentBatchNumber() async {
+    try {
+      final List<dynamic> response = await _supabase
+          .from(SupabaseConfig.queueEntriesTable)
+          .select(SupabaseConfig.batchNumberColumn)
+          .order(SupabaseConfig.batchNumberColumn, ascending: false)
+          .limit(1);
+
+      if (response.isNotEmpty) {
+        final row = response.first;
+        final batch = row[SupabaseConfig.batchNumberColumn];
+        if (batch is int) {
+          _currentBatchNumber = batch;
+        }
+      }
+    } catch (_) {
+      _currentBatchNumber = 1;
+    }
   }
 
   // Get Supabase client
@@ -110,6 +132,23 @@ class SupabaseService {
     }
   }
 
+  Future<QueueEntry?> getQueueEntryByReference(String referenceNumber) async {
+    try {
+      final response = await _supabase
+          .from(SupabaseConfig.queueEntriesTable)
+          .select()
+          .eq('reference_number', referenceNumber)
+          .order(SupabaseConfig.timestampColumn, ascending: false)
+          .limit(1)
+          .single();
+
+      return QueueEntry.fromJson(response);
+    } catch (e) {
+      print('Error fetching entry by reference number: $e');
+      return null;
+    }
+  }
+
   Future<List<QueueEntry>> getQueueEntriesByDepartment(
     String department,
   ) async {
@@ -121,6 +160,7 @@ class SupabaseService {
           .or(
             '${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusWaiting},${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusServing}',
           )
+          .order(SupabaseConfig.batchNumberColumn, ascending: true)
           .order('is_priority', ascending: false) // Priority first
           .order(
             SupabaseConfig.queueNumberColumn,
@@ -147,6 +187,7 @@ class SupabaseService {
           .or(
             '${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusWaiting},${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusServing}',
           )
+          .order(SupabaseConfig.batchNumberColumn, ascending: true)
           .order('is_priority', ascending: false) // Priority first
           .order(
             SupabaseConfig.queueNumberColumn,
@@ -170,6 +211,7 @@ class SupabaseService {
           .or(
             '${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusWaiting},${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusServing}',
           )
+          .order(SupabaseConfig.batchNumberColumn, ascending: true)
           .order('is_priority', ascending: false) // Priority first
           .order(
             SupabaseConfig.queueNumberColumn,
@@ -198,6 +240,7 @@ class SupabaseService {
           .or(
             '${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusWaiting},${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusServing}',
           )
+          .order(SupabaseConfig.batchNumberColumn, ascending: true)
           .order('is_priority', ascending: false) // Priority first
           .order(
             SupabaseConfig.queueNumberColumn,
@@ -245,6 +288,7 @@ class SupabaseService {
           .or(
             '${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusWaiting},${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusServing}',
           )
+          .order(SupabaseConfig.batchNumberColumn, ascending: true)
           .order('is_priority', ascending: false) // Priority first
           .order(
             SupabaseConfig.queueNumberColumn,
@@ -353,7 +397,7 @@ class SupabaseService {
     String? notes,
   }) async {
     try {
-      final nextNumber = await _getNextGlobalQueueNumber();
+      final nextNumber = await _getNextQueueNumberForCurrentBatch();
 
       // Generate unique reference number
       final referenceNumber = _generateReferenceNumber(department, nextNumber);
@@ -369,6 +413,7 @@ class SupabaseService {
         course: course,
         timestamp: DateTime.now(),
         queueNumber: nextNumber,
+        batchNumber: _currentBatchNumber,
         isPwd: isPwd,
         isSenior: isSenior,
         isPregnant: isPregnant,
@@ -565,6 +610,7 @@ class SupabaseService {
           .select()
           .eq(SupabaseConfig.departmentColumn, department)
           .eq(SupabaseConfig.statusColumn, SupabaseConfig.statusWaiting)
+          .order(SupabaseConfig.batchNumberColumn)
           .order(
             SupabaseConfig.queueNumberColumn,
           ) // FCFS: First Come, First Serve
@@ -606,6 +652,7 @@ class SupabaseService {
           .select()
           .eq(SupabaseConfig.departmentColumn, department)
           .eq(SupabaseConfig.statusColumn, SupabaseConfig.statusWaiting)
+          .order(SupabaseConfig.batchNumberColumn)
           .order(
             SupabaseConfig.queueNumberColumn,
           ); // FCFS: First Come, First Serve
@@ -657,24 +704,7 @@ class SupabaseService {
   }
 
   // Clean up old completed/missed entries (keep only recent history)
-  Future<void> cleanupOldEntries() async {
-    try {
-      final oneDayAgo = DateTime.now().subtract(const Duration(days: 1));
-
-      // Delete old completed and missed entries
-      await _supabase
-          .from(SupabaseConfig.queueEntriesTable)
-          .delete()
-          .or(
-            '${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusCompleted},${SupabaseConfig.statusColumn}.eq.${SupabaseConfig.statusMissed}',
-          )
-          .lt(SupabaseConfig.timestampColumn, oneDayAgo.toIso8601String());
-
-      print('Cleaned up old completed/missed entries');
-    } catch (e) {
-      print('Error cleaning up old entries: $e');
-    }
-  }
+  Future<void> cleanupOldEntries() async {}
 
   // Immediately remove missed entries from live queue
   Future<void> removeMissedEntriesFromLiveQueue() async {
@@ -860,7 +890,7 @@ class SupabaseService {
         'serving': totalServing,
         'completed': totalCompleted,
         'missed': totalMissed,
-        'next_queue_number': await _getNextQueueNumberForDepartment(department),
+        'next_queue_number': await _getNextQueueNumberForCurrentBatch(),
       };
     } catch (e) {
       print('Error getting department queue statistics: $e');
@@ -879,24 +909,7 @@ class SupabaseService {
   // Reset queue with purpose-based functionality
   Future<bool> resetQueue({String? purpose, String? department}) async {
     try {
-      print('Resetting queue - Purpose: $purpose, Department: $department');
-
-      if (department != null) {
-        // Reset specific department only
-        await _supabase
-            .from(SupabaseConfig.queueEntriesTable)
-            .delete()
-            .eq(SupabaseConfig.departmentColumn, department);
-        print('Reset completed for department: $department');
-      } else {
-        // Reset all departments
-        await _supabase
-            .from(SupabaseConfig.queueEntriesTable)
-            .delete()
-            .neq(SupabaseConfig.idColumn, '');
-        print('Reset completed for all departments');
-      }
-
+      _currentBatchNumber += 1;
       return true;
     } catch (e) {
       print('Error resetting queue: $e');
@@ -1130,18 +1143,21 @@ class SupabaseService {
     }
   }
 
-  Future<int> _getNextGlobalQueueNumber() async {
+  Future<int> _getNextQueueNumberForCurrentBatch() async {
     try {
-      final response = await _supabase
+      final List<dynamic> response = await _supabase
           .from(SupabaseConfig.queueEntriesTable)
           .select(SupabaseConfig.queueNumberColumn)
+          .eq(SupabaseConfig.batchNumberColumn, _currentBatchNumber)
           .order(SupabaseConfig.queueNumberColumn, ascending: false)
-          .limit(1)
-          .single();
+          .limit(1);
 
-      final queueNumber = response[SupabaseConfig.queueNumberColumn];
-      if (queueNumber != null) {
-        return (queueNumber as int) + 1;
+      if (response.isNotEmpty) {
+        final row = response.first;
+        final queueNumber = row[SupabaseConfig.queueNumberColumn];
+        if (queueNumber != null) {
+          return (queueNumber as int) + 1;
+        }
       }
       return 1;
     } catch (e) {
